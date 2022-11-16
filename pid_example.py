@@ -5,37 +5,43 @@ import matplotlib.patches as mpatches
 from matplotlib.transforms import Affine2D
 from matplotlib.animation import FuncAnimation
 
-P = 20
-I = 0.00001
-D = 10
+P = 10
+I = 0.01
+D = 5
 
 class Robot:
 
     def __init__(self, x_pos: float, y_pos: float, p: float, i: float, d: float):
         self.x_pos = x_pos
         self.y_pos = y_pos
-        self.controller = Controller(x_pos, p, i, d)
+        self.x_controller = Controller(x_pos, p, i, d)
+        self.y_controller = Controller(y_pos, p, i, d)
         self.x_speed = 0
         self.y_speed = 0
         self.x_goal = 0
         self.y_goal = 0
         self.mass = 3
-        self.friction = 0.0
+        self.max_effort = 10
+        self.friction = 0.01
 
     def update(self, dt):
-        x_effort = (self.controller.compute_effort(
-            self.x_pos, self.x_goal, dt))
+        effort = self.x_controller.compute_effort(
+            self.x_pos, self.x_goal, dt)
         
-        y_effort = (self.controller.compute_effort(
-            self.y_pos, self.y_goal, dt))
+        x_effort = np.sign(effort)*min(np.abs(effort), self.max_effort)
+        
+        effort = self.y_controller.compute_effort(
+            self.y_pos, self.y_goal, dt)
+
+        y_effort = np.sign(effort)*min(np.abs(effort), self.max_effort)
         
         x_acc = x_effort/self.mass
         y_acc = y_effort/self.mass
         # Equtions of motion:
-        self.x_pos = self.x_pos + self.x_speed*dt + x_acc*dt**2 - self.friction*dt**2
+        self.x_pos = self.x_pos + self.x_speed*dt + x_acc/2*dt**2 - self.friction*dt**2
         self.x_speed = self.x_speed + x_acc*dt - self.friction*dt
 
-        self.y_pos = self.y_pos + self.y_speed*dt + y_acc*dt**2 - self.friction*dt**2
+        self.y_pos = self.y_pos + self.y_speed*dt + y_acc/2*dt**2 - self.friction*dt**2
         self.y_speed = self.y_speed + y_acc*dt - self.friction*dt
         
         return self.x_pos, self.y_pos
@@ -50,6 +56,7 @@ class Controller:
         self.d = d
         self.acc_err = 0
         self.err_prev = 0
+        self.windup_lim = 10
         self.t_prev = -0.0001
 
     def compute_effort(self, x_pos, x_goal, dt):
@@ -57,6 +64,8 @@ class Controller:
         print(f"Error: {err}")
         self.acc_err = self.acc_err + err
         P = err*self.p
+        sign = np.sign(self.acc_err)
+        self.acc_err = sign*min(np.abs(self.acc_err), self.windup_lim)
         I = self.acc_err*self.i
         D = self.d*(err-self.err_prev)/(dt)
         self.err_prev = err
@@ -69,8 +78,8 @@ class Controller:
 fig, ax = plt.subplots()
 x_goal_ax = fig.add_axes([0.25, 0.1, 0.65, 0.03])
 y_goal_ax = fig.add_axes([0.1, 0.25, 0.03, 0.65])
-button_ax = fig.add_axes([0.35, 0.2, 0.65, 0.1])
-fig.subplots_adjust(bottom=0.25,left=0.25)
+button_ax = fig.add_axes([0.35, 0.15, 0.375, 0.1])
+fig.subplots_adjust(bottom=0.35,left=0.25)
 goal_slider_x = Slider(
     ax=x_goal_ax,
     label='X Goal [m]',
@@ -120,9 +129,12 @@ def init():
     ax.set_aspect('equal')
     return [body]
 
-
+x_errors = []
+y_errors = []
 def update(i):
     x_pos, y_pos = robot.update(dt)
+    x_errors.append(robot.x_goal-robot.x_pos)
+    y_errors.append(robot.y_goal-robot.y_pos)
     body.set_transform(Affine2D().translate(x_pos, y_pos) + ax.transData)
     return [body]
 
@@ -131,4 +143,8 @@ ani = FuncAnimation(fig, update, frames=range(int(1000)),
                     init_func=init, interval=dt, blit=True)
 ax.set_xlim((-16, 16))
 ax.set_ylim((-16, 16))
+plt.show()
+plt.figure()
+plt.plot(range(0,len(x_errors)),x_errors)
+plt.plot(range(0,len(y_errors)), y_errors)
 plt.show()
