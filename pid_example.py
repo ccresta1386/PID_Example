@@ -4,10 +4,30 @@ from matplotlib.widgets import Slider, Button
 import matplotlib.patches as mpatches
 from matplotlib.transforms import Affine2D
 from matplotlib.animation import FuncAnimation
+"""
+This is a simple simulation of a 2-Dimensional PID control of an object to show how the P,I, and D parameters
+will influence the response of the "Robot" to their variation.
 
-P = 10
+To use run the python script and set the x and y sliders to the desired positions, then click go. Close the 
+first plot to show the 'response' plot. This is how the performance of the PID is evaluated.
+
+Try varying P, I, and D and seeing how the initial motion changes. Look at the response plot and try to make it 
+look like the critically damped plot here:
+https://docs.wpilib.org/en/stable/docs/software/advanced-controls/introduction/introduction-to-pid.html#response-types
+
+In depth explanation: https://docs.wpilib.org/en/stable/docs/software/advanced-controls/introduction/introduction-to-pid.html
+
+TL;DR: Proportional pushes the system towards the setpoint, derivative looks ahead to say it is moving to fast, and needs to slow down,
+and integral says, it haven't gotten to the goal and it's been 10 seconds, maybe I should try harder.
+
+"""
+
+# Change these to mess with the response
+P = 50
 I = 0.01
-D = 5
+D = 30
+
+#### Change below to mess with the simulation
 
 class Robot:
 
@@ -20,9 +40,9 @@ class Robot:
         self.y_speed = 0
         self.x_goal = 0
         self.y_goal = 0
-        self.mass = 3
-        self.max_effort = 10
-        self.friction = 0.01
+        self.mass = 30
+        self.max_effort = 50
+        self.friction = 0.03
 
     def update(self, dt):
         effort = self.x_controller.compute_effort(
@@ -47,30 +67,30 @@ class Robot:
         return self.x_pos, self.y_pos
 
 
+###### Change below to mess with the controller
+
 class Controller:
-    def __init__(self, x_pos: float, p: float, i: float, d: float):
-        self.x_prev = x_pos
-        self.x_pos = x_pos
+    def __init__(self, x_position: float, p: float, i: float, d: float):
+        self.x_prev = x_position
+        self.x_position = x_position
         self.p = p
         self.i = i
         self.d = d
-        self.acc_err = 0
-        self.err_prev = 0
-        self.windup_lim = 10
+        self.accrued_error = 0
+        self.error_previous = 0
+        self.windup_limit = 10 # The maximum value of the integral control portion
         self.t_prev = -0.0001
 
-    def compute_effort(self, x_pos, x_goal, dt):
-        err = x_goal-x_pos
-        print(f"Error: {err}")
-        self.acc_err = self.acc_err + err
-        P = err*self.p
-        sign = np.sign(self.acc_err)
-        self.acc_err = sign*min(np.abs(self.acc_err), self.windup_lim)
-        I = self.acc_err*self.i
-        D = self.d*(err-self.err_prev)/(dt)
-        self.err_prev = err
-        print(f"Effort: {P+I+D}")
-        return P+I+D
+    def compute_effort(self, x_position, x_goal, dt):
+        error = x_goal-x_position
+        self.accrued_error = self.accrued_error + error
+        p_effort = error*self.p
+        sign = np.sign(self.accrued_error)
+        self.accrued_error = sign*min(np.abs(self.accrued_error), self.windup_limit)
+        i_effort = self.accrued_error*self.i
+        d_effort = self.d*(error-self.error_previous)/(dt)
+        self.error_previous = error
+        return p_effort + i_effort + d_effort
 
 
 # Script to set up the animation
@@ -96,7 +116,9 @@ goal_slider_y = Slider(
     valinit=0,
 )
 go_button = Button(button_ax, "Go!",color="r")
-dt = 0.01
+
+# dt is the change in time, aka timestep
+dt = 0.001
 
 # Visual parameters
 w_body = 5
@@ -132,7 +154,7 @@ def init():
 x_errors = []
 y_errors = []
 def update(i):
-    x_pos, y_pos = robot.update(dt)
+    x_pos, y_pos = robot.update(dt*10)
     x_errors.append(robot.x_goal-robot.x_pos)
     y_errors.append(robot.y_goal-robot.y_pos)
     body.set_transform(Affine2D().translate(x_pos, y_pos) + ax.transData)
@@ -140,11 +162,14 @@ def update(i):
 
 
 ani = FuncAnimation(fig, update, frames=range(int(1000)),
-                    init_func=init, interval=dt, blit=True)
+                    init_func=init, interval=dt*1000, blit=True)
 ax.set_xlim((-16, 16))
 ax.set_ylim((-16, 16))
 plt.show()
 plt.figure()
-plt.plot(range(0,len(x_errors)),x_errors)
-plt.plot(range(0,len(y_errors)), y_errors)
+plt.plot(np.array(list(range(0,len(x_errors))))*dt,x_errors)
+plt.plot(np.array(list(range(0,len(y_errors))))*dt, y_errors)
+plt.legend(["x","y"])
+plt.ylabel("Error")
+plt.xlabel("Time (s)")
 plt.show()
