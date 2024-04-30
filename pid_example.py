@@ -98,7 +98,9 @@ class Controller:
 fig, ax = plt.subplots()
 x_goal_ax = fig.add_axes([0.25, 0.1, 0.65, 0.03])
 y_goal_ax = fig.add_axes([0.1, 0.25, 0.03, 0.65])
-button_ax = fig.add_axes([0.35, 0.15, 0.375, 0.1])
+button_ax = fig.add_axes([0.3, 0.15, 0.375, 0.1])
+check_ax = fig.add_axes([0.7, 0.15, 0.2, 0.1])
+
 fig.subplots_adjust(bottom=0.35,left=0.25)
 goal_slider_x = Slider(
     ax=x_goal_ax,
@@ -116,6 +118,7 @@ goal_slider_y = Slider(
     valinit=0,
 )
 go_button = Button(button_ax, "Go!",color="r")
+follow_cursor_button = Button(check_ax, "Follow Cursor", color="r")
 
 # dt is the change in time, aka timestep
 dt = 0.001
@@ -143,8 +146,21 @@ def update_goal(val):
     robot.x_goal = goal_slider_x.val
     robot.y_goal = goal_slider_y.val
 
+def cursor_toggle(val):
+    if(follow_cursor_button.color == "r"):
+        follow_cursor_button.color = "g"
+    else:
+        follow_cursor_button.color = "r"
+
+def mouse_move(event):
+    if follow_cursor_button.color == "g":
+        x, y = event.xdata, event.ydata
+        if event.inaxes != None and event.inaxes == ax:
+            robot.x_goal = x
+            robot.y_goal = y
 
 go_button.on_clicked(func=update_goal)
+follow_cursor_button.on_clicked(func=cursor_toggle)
 
 
 def init():
@@ -165,6 +181,8 @@ ani = FuncAnimation(fig, update, frames=range(int(1000)),
                     init_func=init, interval=dt*1000, blit=True)
 ax.set_xlim((-16, 16))
 ax.set_ylim((-16, 16))
+
+plt.connect('motion_notify_event', mouse_move)
 plt.show()
 plt.figure()
 plt.plot(np.array(list(range(0,len(x_errors))))*dt,x_errors)
