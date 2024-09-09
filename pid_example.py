@@ -49,7 +49,7 @@ class Robot:
             self.x_pos, self.x_goal, dt)
         
         x_effort = np.sign(effort)*min(np.abs(effort), self.max_effort)
-        
+
         effort = self.y_controller.compute_effort(
             self.y_pos, self.y_goal, dt)
 
@@ -58,11 +58,11 @@ class Robot:
         x_acc = x_effort/self.mass
         y_acc = y_effort/self.mass
         # Equtions of motion:
-        self.x_pos = self.x_pos + self.x_speed*dt + x_acc/2*dt**2 - self.friction*dt**2
-        self.x_speed = self.x_speed + x_acc*dt - self.friction*dt
-
-        self.y_pos = self.y_pos + self.y_speed*dt + y_acc/2*dt**2 - self.friction*dt**2
-        self.y_speed = self.y_speed + y_acc*dt - self.friction*dt
+        self.x_pos = self.x_pos + self.x_speed*dt + x_acc/2*dt**2 - (self.friction*dt**2)*min(self.x_speed, 1)
+        self.x_speed = self.x_speed + x_acc*dt - (self.friction*dt)*min(self.x_speed, 1)
+        
+        self.y_pos = self.y_pos + self.y_speed*dt + y_acc/2*dt**2 - (self.friction*dt**2)*min(self.y_speed, 1)
+        self.y_speed = self.y_speed + y_acc*dt - (self.friction*dt)*min(self.y_speed, 1)
         
         return self.x_pos, self.y_pos
 
